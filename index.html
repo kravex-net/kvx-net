@@ -3,891 +3,290 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kravex — Elasticsearch &amp; OpenSearch Migration Tool</title>
-<meta name="description" content="The open-source migration engine for Elasticsearch and OpenSearch. ES 5–8, OpenSearch 1–3. Any version, any direction. Raw index-to-index data movement across every version combination.">
+<title>Kravex — Elasticsearch &amp; OpenSearch migration</title>
+<meta name="description" content="A command-line engine that moves documents between Elasticsearch and OpenSearch clusters. Adaptive throttling, retries for failed bulk items, TOML config. Source-available under BSL 1.1.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  --bg-primary: #09090b;
-  --bg-secondary: #0f0f12;
-  --bg-tertiary: #151518;
-  --bg-card: #151518;
-  --accent: #c48a1a;
-  --accent-bright: #d9a033;
-  --accent-dim: #c48a1a15;
-  --accent-glow: #c48a1a30;
-  --crimson: #c92a2a;
-  --crimson-bright: #e03535;
-  --crimson-dim: #c92a2a15;
-  --text-primary: #e4e2de;
-  --text-secondary: #84827c;
-  --text-muted: #54524d;
-  --border: #23232a;
-  --border-bright: #2e2e36;
-  --green: #c48a1a;
-  --red: #c92a2a;
-  --yellow: #d9a033;
-  --orange: #db6d28;
+  --bg: #0c0c0e;
+  --bg-code: #131316;
+  --text: #e6e4df;
+  --text-dim: #9a988f;
+  --border: #26262b;
+  --accent: #d9a033;
+  --accent-ink: #0c0c0e;
   --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #fbfaf7;
+    --bg-code: #f1efe9;
+    --text: #1d1c1a;
+    --text-dim: #5f5d56;
+    --border: #dedbd2;
+    --accent: #8a5a00;
+    --accent-ink: #fbfaf7;
+  }
 }
 
-::selection { background: var(--accent); color: var(--bg-primary); }
-html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+html { -webkit-text-size-adjust: 100%; }
 body {
   font-family: var(--font-sans);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  line-height: 1.6;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.65;
   -webkit-font-smoothing: antialiased;
 }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+code, pre { font-family: var(--font-mono); font-size: 0.875em; }
+:not(pre) > code { background: var(--bg-code); border: 1px solid var(--border); padding: 0.1em 0.35em; border-radius: 4px; }
 
-/* NAV */
-nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  background: #09090bdd;
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--border);
-  border-top: 2px solid var(--crimson);
-  transition: box-shadow 0.3s;
-}
-nav.scrolled { box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
-.nav-inner {
-  max-width: 1200px; margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 24px; height: 64px;
-}
-.nav-logo {
-  font-family: var(--font-mono); font-weight: 700; font-size: 1.25rem;
-  color: var(--accent); text-decoration: none; letter-spacing: -0.5px;
-}
-.nav-logo span { color: var(--crimson-bright); }
-.nav-links { display: flex; gap: 28px; list-style: none; }
-.nav-links a {
-  color: var(--text-secondary); text-decoration: none; font-size: 0.875rem;
-  transition: color 0.2s;
-}
-.nav-links a:hover { color: var(--text-primary); }
-.nav-cta {
-  background: var(--accent); color: var(--bg-primary); padding: 8px 18px;
-  border-radius: 6px; font-size: 0.875rem; font-weight: 600;
-  text-decoration: none; transition: opacity 0.2s;
-}
-.nav-cta:hover { opacity: 0.85; }
-.nav-toggle { display: none; background: none; border: none; color: var(--text-primary); font-size: 1.5rem; cursor: pointer; }
+.wrap { max-width: 880px; margin: 0 auto; padding: 0 24px; }
 
-/* SECTIONS */
-section { padding: 100px 24px; }
-.container { max-width: 1200px; margin: 0 auto; }
-.section-label {
-  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600;
-  color: var(--accent); text-transform: uppercase; letter-spacing: 2px;
-  margin-bottom: 16px;
-}
-.section-title {
-  font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 700;
-  line-height: 1.2; margin-bottom: 20px;
-}
-.section-subtitle {
-  font-size: 1.1rem; color: var(--text-secondary); max-width: 640px;
-  line-height: 1.7;
-}
+/* header */
+header { border-bottom: 1px solid var(--border); }
+header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 24px; height: 60px; }
+.wordmark { font-family: var(--font-mono); font-weight: 500; color: var(--text); text-decoration: none; }
+nav ul { display: flex; gap: 24px; list-style: none; font-size: 0.9rem; }
+nav a { color: var(--text-dim); text-decoration: none; }
+nav a:hover { color: var(--text); }
 
-/* HERO */
-.hero {
-  min-height: 100vh; display: flex; align-items: center;
-  padding-top: 64px; position: relative; overflow: hidden;
-}
-.hero::before {
-  content: ''; position: absolute; top: -40%; right: -20%;
-  width: 800px; height: 800px; border-radius: 50%;
-  background: radial-gradient(circle, var(--accent-glow), transparent 70%);
-  pointer-events: none;
-}
-.hero-content { position: relative; z-index: 1; max-width: 720px; }
-.hero h1 {
-  font-size: clamp(2.25rem, 5.5vw, 3.75rem); font-weight: 800;
-  line-height: 1.1; margin-bottom: 24px; letter-spacing: -1px;
-}
-.hero h1 .highlight {
-  background: linear-gradient(135deg, var(--crimson-bright), var(--accent-bright));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.hero p {
-  font-size: 1.2rem; color: var(--text-secondary); max-width: 560px;
-  margin-bottom: 36px; line-height: 1.7;
-}
-.hero-buttons { display: flex; gap: 16px; flex-wrap: wrap; }
-.btn-primary {
-  background: var(--accent); color: var(--bg-primary); padding: 14px 28px;
-  border-radius: 8px; font-size: 1rem; font-weight: 700;
-  text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 30px var(--accent-glow), 0 0 60px var(--crimson-dim); }
-.btn-secondary {
-  background: transparent; color: var(--text-primary); padding: 14px 28px;
-  border-radius: 8px; font-size: 1rem; font-weight: 600;
-  text-decoration: none; border: 1px solid var(--border);
-  display: inline-flex; align-items: center; gap: 8px;
-  transition: border-color 0.2s, background 0.2s;
-}
-.btn-secondary:hover { border-color: var(--text-secondary); background: var(--bg-secondary); }
+/* sections */
+section { padding: 72px 0; border-bottom: 1px solid var(--border); }
+section:last-of-type { border-bottom: 0; }
+h1 { font-size: clamp(2rem, 5vw, 2.75rem); line-height: 1.15; font-weight: 600; letter-spacing: -0.02em; max-width: 22ch; }
+h2 { font-size: 1.5rem; line-height: 1.3; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 16px; }
+h3 { font-size: 1rem; font-weight: 600; margin: 32px 0 8px; }
+p { max-width: 62ch; }
+p + p { margin-top: 16px; }
+.lede { font-size: 1.125rem; color: var(--text-dim); margin-top: 20px; }
+.dim { color: var(--text-dim); }
+.small { font-size: 0.875rem; }
 
-/* TERMINAL */
-.terminal {
-  background: var(--bg-secondary); border: 1px solid var(--border);
-  border-radius: 10px; margin-top: 60px; max-width: 680px;
-  border-top: 2px solid var(--crimson);
-  overflow: hidden; box-shadow: 0 20px 60px #00000060;
-}
-.terminal-header {
-  display: flex; align-items: center; gap: 8px;
-  padding: 12px 16px; background: var(--bg-tertiary); border-bottom: 1px solid var(--border);
-}
-.terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
-.terminal-dot.r { background: var(--crimson-bright); }
-.terminal-dot.y { background: var(--accent); }
-.terminal-dot.g { background: var(--border-bright); }
-.terminal-title {
-  font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted);
-  margin-left: 8px;
-}
-.terminal-body {
-  padding: 20px; font-family: var(--font-mono); font-size: 0.8rem;
-  line-height: 1.8; color: var(--text-secondary); min-height: 220px;
-}
-.terminal-body .prompt { color: var(--green); }
-.terminal-body .cmd { color: var(--text-primary); }
-.terminal-body .flag { color: var(--accent); }
-.terminal-body .output { color: var(--text-muted); }
-.terminal-body .success { color: var(--green); }
-.terminal-body .progress-bar {
-  display: inline-block; color: var(--accent);
-}
-.terminal-body .cursor {
-  display: inline-block; width: 8px; height: 16px;
-  background: var(--accent); animation: blink 1s step-end infinite;
-  vertical-align: text-bottom; margin-left: 2px;
-}
-@keyframes blink { 50% { opacity: 0; } }
+.hero { padding: 80px 0 72px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+.btn { display: inline-block; padding: 10px 18px; border-radius: 6px; font-weight: 500; text-decoration: none; border: 1px solid var(--border); color: var(--text); }
+.btn:hover { border-color: var(--text-dim); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn-primary:hover { border-color: var(--accent); filter: brightness(1.08); }
 
-/* PROBLEM */
-.problem-section { background: var(--bg-secondary); }
-.problem-grid {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 48px; margin-top: 48px; align-items: start;
+pre {
+  background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+  padding: 16px 18px; overflow-x: auto; line-height: 1.7; margin-top: 16px;
 }
-.problem-quote {
-  font-size: 1.5rem; font-weight: 600; line-height: 1.4;
-  color: var(--text-primary); border-left: 3px solid var(--accent);
-  padding-left: 24px; margin-bottom: 24px;
-}
-.compliance-grid {
-  display: grid; gap: 12px;
-}
-.compliance-item {
-  display: flex; align-items: center; gap: 16px;
-  background: var(--bg-tertiary); padding: 16px 20px;
-  border-radius: 8px; border: 1px solid var(--border);
-}
-.compliance-badge {
-  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700;
-  color: var(--accent); background: rgba(56,189,248,0.1);
-  padding: 4px 10px; border-radius: 4px; white-space: nowrap;
-}
-.compliance-item span:last-child {
-  font-size: 0.9rem; color: var(--text-secondary);
-}
+pre .c { color: var(--text-dim); }
+.hero pre { margin-top: 32px; max-width: 620px; }
 
-/* COMPETITORS */
-.competitors-grid {
-  display: grid; gap: 16px; margin-top: 48px;
-}
-.competitor-card {
-  display: grid; grid-template-columns: 180px 1fr auto;
-  align-items: center; gap: 24px;
-  background: var(--bg-secondary); border: 1px solid var(--border);
-  border-radius: 10px; padding: 20px 24px;
-  transition: border-color 0.2s;
-}
-.competitor-card:hover { border-color: var(--text-muted); }
-.competitor-name {
-  font-weight: 700; font-size: 0.95rem;
-}
-.competitor-verdict {
-  font-size: 0.9rem; color: var(--text-secondary); line-height: 1.5;
-}
-.competitor-tag {
-  font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600;
-  padding: 4px 10px; border-radius: 4px; white-space: nowrap;
-}
-.tag-slow { color: var(--crimson-bright); background: var(--crimson-dim); }
-.tag-lock { color: var(--orange); background: rgba(219,109,40,0.1); }
-.tag-toy { color: var(--yellow); background: rgba(210,153,34,0.1); }
-.tag-fragile { color: var(--crimson-bright); background: var(--crimson-dim); }
+dl.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 24px; margin-top: 40px; }
+dl.facts dt { font-size: 0.8rem; color: var(--text-dim); }
+dl.facts dd { font-weight: 500; }
 
-/* HOW IT WORKS */
-.steps-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr);
-  gap: 32px; margin-top: 48px;
-}
-.step-card {
-  background: var(--bg-secondary); border: 1px solid var(--border);
-  border-radius: 10px; padding: 32px;
-}
-.step-num {
-  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700;
-  color: var(--accent); margin-bottom: 16px;
-}
-.step-card h3 {
-  font-size: 1.25rem; margin-bottom: 12px;
-}
-.step-card p {
-  font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6;
-}
-.step-code {
-  background: var(--bg-tertiary); border: 1px solid var(--border);
-  border-radius: 6px; padding: 16px; margin-top: 16px;
-  font-family: var(--font-mono); font-size: 0.75rem;
-  color: var(--text-secondary); line-height: 1.7; overflow-x: auto;
-}
-.step-code .key { color: var(--accent); }
-.step-code .val { color: var(--green); }
-.step-code .comment { color: var(--text-muted); }
+ul.plain { margin: 12px 0 0 1.2em; max-width: 62ch; }
+ul.plain li { margin-top: 8px; padding-left: 4px; }
 
-/* PRICING */
-.pricing-grid {
-  display: grid; grid-template-columns: repeat(4, 1fr);
-  gap: 20px; margin-top: 48px;
-}
-.price-card {
-  background: var(--bg-secondary); border: 1px solid var(--border);
-  border-radius: 12px; padding: 32px 24px;
-  display: flex; flex-direction: column;
-  transition: border-color 0.2s, transform 0.2s;
-}
-.price-card:hover { transform: translateY(-4px); }
-.price-tier {
-  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700;
-  color: var(--accent); letter-spacing: 1px; margin-bottom: 8px;
-}
-.price-card h3 { font-size: 1.3rem; margin-bottom: 8px; }
-.price-amount {
-  font-size: 2rem; font-weight: 800; margin-bottom: 4px;
-}
-.price-note {
-  font-size: 0.8rem; color: var(--text-muted); margin-bottom: 24px;
-}
-.price-features {
-  list-style: none; flex: 1; margin-bottom: 24px;
-}
-.price-features li {
-  font-size: 0.85rem; color: var(--text-secondary); padding: 6px 0;
-  padding-left: 20px; position: relative;
-}
-.price-features li::before {
-  content: '✓'; position: absolute; left: 0; color: var(--accent);
-  font-weight: 700; font-size: 0.8rem;
-}
-.price-btn {
-  display: block; text-align: center; padding: 12px;
-  border-radius: 8px; font-weight: 600; font-size: 0.9rem;
-  text-decoration: none; transition: opacity 0.2s;
-}
-.price-btn-primary { background: var(--accent); color: var(--bg-primary); }
-.price-btn-outline { border: 1px solid var(--border); color: var(--text-primary); }
-.price-btn:hover { opacity: 0.85; }
-.price-sub-options {
-  font-size: 0.75rem; color: var(--text-muted); margin-top: 8px; text-align: center;
-  font-family: var(--font-mono);
-}
+/* tables */
+.table-scroll { overflow-x: auto; margin-top: 20px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { text-align: left; padding: 12px 16px 12px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-weight: 500; color: var(--text-dim); font-size: 0.8rem; white-space: nowrap; }
+td.num, th.num { text-align: right; font-family: var(--font-mono); white-space: nowrap; padding-right: 16px; }
+td.num { font-size: 0.85rem; }
+table.compare td:first-child { white-space: nowrap; font-weight: 500; padding-right: 24px; }
+caption { text-align: left; color: var(--text-dim); font-size: 0.875rem; padding-bottom: 4px; caption-side: bottom; padding-top: 12px; }
 
-/* COMPLIANCE */
-.compliance-section { background: var(--bg-secondary); }
-.framework-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px; margin-top: 48px;
-}
-.framework-card {
-  background: var(--bg-tertiary); border: 1px solid var(--border);
-  border-radius: 10px; padding: 24px;
-}
-.framework-card h4 {
-  font-family: var(--font-mono); font-size: 0.9rem; color: var(--accent);
-  margin-bottom: 8px;
-}
-.framework-card .retention {
-  font-size: 1.75rem; font-weight: 800; margin-bottom: 8px;
-}
-.framework-card p {
-  font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;
-}
+.terms { display: grid; gap: 28px; margin-top: 28px; }
+.terms h3 { margin-top: 0; }
+.terms p { margin-top: 4px; }
 
-/* TRUST */
-.trust-grid {
-  display: grid; grid-template-columns: 1fr;
-  gap: 24px; margin-top: 48px;
-}
-.trust-card {
-  background: var(--bg-secondary); border: 1px solid var(--border);
-  border-radius: 10px; padding: 32px;
-}
-.trust-card h4 { font-size: 1.1rem; margin-bottom: 12px; }
-.trust-card p { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; }
+footer { border-top: 1px solid var(--border); padding: 40px 0 56px; font-size: 0.875rem; color: var(--text-dim); }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 40px; }
+footer ul { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 24px; }
+footer a { color: var(--text-dim); }
+footer a:hover { color: var(--text); }
 
-/* FOOTNOTES */
-.footnotes-section {
-  margin-top: 48px; padding-top: 32px;
-  border-top: 1px solid var(--border);
-}
-.footnotes-section h4 {
-  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700;
-  color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;
-  margin-bottom: 16px;
-}
-.footnote-item {
-  font-size: 0.8rem; color: var(--text-muted); line-height: 1.6;
-  margin-bottom: 8px; padding-left: 20px; position: relative;
-}
-.footnote-item span.fn-num {
-  position: absolute; left: 0; color: var(--accent); font-weight: 700;
-  font-family: var(--font-mono); font-size: 0.75rem;
-}
-.footnote-item a {
-  color: var(--accent-dim); text-decoration: none;
-  transition: color 0.2s;
-}
-.footnote-item a:hover { color: var(--accent); }
-sup a {
-  color: var(--accent); text-decoration: none; font-weight: 700;
-  font-size: 0.7rem;
-}
-sup a:hover { text-decoration: underline; }
-
-/* FOOTER */
-footer {
-  background: var(--bg-secondary); border-top: 1px solid var(--border);
-  border-bottom: 2px solid var(--crimson);
-  padding: 60px 24px;
-}
-.footer-inner {
-  max-width: 1200px; margin: 0 auto;
-  display: flex; justify-content: space-between; align-items: start;
-  flex-wrap: wrap; gap: 40px;
-}
-.footer-brand p { color: var(--text-muted); font-size: 0.85rem; max-width: 300px; margin-top: 12px; }
-.footer-links h5 {
-  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 1px; color: var(--text-muted); margin-bottom: 16px;
-}
-.footer-links a {
-  display: block; color: var(--text-secondary); text-decoration: none;
-  font-size: 0.9rem; padding: 4px 0; transition: color 0.2s;
-}
-.footer-links a:hover { color: var(--text-primary); }
-.footer-bottom {
-  max-width: 1200px; margin: 40px auto 0;
-  padding-top: 24px; border-top: 1px solid var(--border);
-  font-size: 0.8rem; color: var(--text-muted);
-  display: flex; justify-content: space-between; align-items: center;
-}
-
-/* RESPONSIVE */
-@media (max-width: 900px) {
-  .nav-links { display: none; }
-  .nav-toggle { display: block; }
-  .nav-links.open {
-    display: flex; flex-direction: column;
-    position: absolute; top: 64px; left: 0; right: 0;
-    background: var(--bg-primary); border-bottom: 1px solid var(--border);
-    padding: 16px 24px; gap: 16px;
-  }
-  .problem-grid { grid-template-columns: 1fr; }
-  .competitor-card { grid-template-columns: 1fr; gap: 8px; }
-  .competitor-tag { justify-self: start; }
-  .steps-grid { grid-template-columns: 1fr; }
-  .pricing-grid { grid-template-columns: 1fr; max-width: 420px; margin-left: auto; margin-right: auto; }
-  .footer-inner { flex-direction: column; }
-  .footer-bottom { flex-direction: column; gap: 8px; text-align: center; }
-}
 @media (max-width: 600px) {
-  section { padding: 64px 16px; }
-  .hero h1 { font-size: 2rem; }
-  .terminal { margin-top: 40px; }
-  .terminal-body { font-size: 0.7rem; padding: 14px; }
+  .wrap { padding: 0 16px; }
+  nav li:not(:last-child) { display: none; }
+  section { padding: 56px 0; }
+  .hero { padding: 56px 0 48px; }
+  table.compare td:first-child { white-space: normal; padding-right: 16px; }
 }
 </style>
 </head>
 <body>
 
-<!-- NAV -->
-<nav id="nav">
-  <div class="nav-inner">
-    <a href="#" class="nav-logo">kravex<span>.net</span></a>
-    <ul class="nav-links" id="navLinks">
-      <li><a href="#problem">Problem</a></li>
-      <li><a href="#competitors">Alternatives</a></li>
-      <li><a href="#how">How It Works</a></li>
-      <li><a href="#pricing">Pricing</a></li>
-      <li><a href="#compliance">Compliance</a></li>
+<header>
+  <div class="wrap">
+    <a href="#" class="wordmark">kravex</a>
+    <nav aria-label="Primary">
+      <ul>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#numbers">Numbers</a></li>
+        <li><a href="#compared">Alternatives</a></li>
+        <li><a href="#licensing">Licensing</a></li>
+        <li><a href="https://github.com/kravex-net/kravex">GitHub</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<section class="hero">
+  <div class="wrap">
+    <h1>Move indices between Elasticsearch and OpenSearch.</h1>
+    <p class="lede">Kravex is a command-line tool that streams documents from one cluster to another through the bulk API. It watches how the destination is coping and adjusts batch size as it goes. Elasticsearch 5–8 and OpenSearch 1–3, in either direction.</p>
+
+    <pre><code>git clone https://github.com/kravex-net/kravex
+cd kravex
+cargo run --release -p kvx-cli -- kvx.toml</code></pre>
+
+    <div class="actions">
+      <a class="btn btn-primary" href="https://github.com/kravex-net/kravex">View on GitHub</a>
+      <a class="btn" href="https://github.com/kravex-net/kravex#quickstart">Quickstart</a>
+    </div>
+
+    <dl class="facts">
+      <div><dt>Reads from / writes to</dt><dd>Elasticsearch, OpenSearch, NDJSON files</dd></div>
+      <div><dt>Written in</dt><dd>Rust</dd></div>
+      <div><dt>Runs as</dt><dd>One CLI binary and a TOML file</dd></div>
+      <div><dt>License</dt><dd>BSL 1.1, then Apache 2.0 in 2029</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p>You describe a source and a destination in a TOML file and run the binary with the file as its only argument. OpenSearch goes through the same <code>Elasticsearch</code> backend, because both speak the same bulk API. Moving from Elasticsearch to OpenSearch is a matter of changing a URL.</p>
+
+<pre><code><span class="c"># kvx.toml</span>
+[source_config.Elasticsearch]
+url   = "http://localhost:9200"
+index = "employees"
+
+[sink_config.Elasticsearch]
+url   = "http://localhost:9201"   <span class="c"># an OpenSearch cluster works here too</span>
+index = "employees"</code></pre>
+
+    <pre><code>cargo run --release -p kvx-cli -- kvx.toml</code></pre>
+
+    <h3>What it does while it runs</h3>
+    <ul class="plain">
+      <li><strong>Adapts batch size to the destination.</strong> It backs off when the cluster returns 429s and ramps back up when it recovers. Pick a fixed size, a throughput-seeking mode, or a latency or CPU-targeting controller in the <code>[governor]</code> section.</li>
+      <li><strong>Doesn't trust a 200.</strong> The bulk API returns 200 even when individual documents are rejected. Kravex reads the response body, and retries the documents that failed.</li>
+      <li><strong>Retries with backoff.</strong> Retry count and backoff are configurable under <code>[drainer]</code>.</li>
+      <li><strong>Authenticates</strong> with basic auth or an API key.</li>
     </ul>
-    <a href="https://github.com/kravex-net/kravex" class="nav-cta">GitHub</a>
-    <button class="nav-toggle" id="navToggle" aria-label="Menu">&#9776;</button>
+
+    <h3>What it doesn't do yet</h3>
+    <ul class="plain">
+      <li>It copies documents only. Create the destination index, with its mappings and settings, before you start. Kravex doesn't migrate mappings, settings or templates.</li>
+      <li>There is no checkpoint file, so an interrupted run can't pick up where it stopped.</li>
+      <li>You build it from source, which needs a Rust toolchain.</li>
+      <li>The version range above comes from the project README. The repo's own Docker setup exercises Elasticsearch 8.15 and OpenSearch 2.19.</li>
+    </ul>
   </div>
-</nav>
+</section>
 
-<!-- HERO -->
-<section class="hero" id="hero">
-  <div class="container">
-    <div class="hero-content">
-      <h1>Elasticsearch 5–8. OpenSearch 1–3.<br>Any version. Any direction.<br><span class="highlight">In a weekend.</span></h1>
-      <p>The open-source migration engine for Elasticsearch and OpenSearch. Raw index-to-index data movement across every version combination. No vendor lock-in. Apache 2.0.</p>
-      <div class="hero-buttons">
-        <a href="https://github.com/kravex-net/kravex" class="btn-primary">
-          <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-          View on GitHub
-        </a>
-        <a href="mailto:daniel@kravex.net" class="btn-secondary">Talk to Sales</a>
-      </div>
+<section id="numbers">
+  <div class="wrap">
+    <h2>Numbers</h2>
+    <p>One dataset, one laptop. This is the Rally <code>geonames</code> corpus: 11,396,503 documents, about 3.5 GB of JSON. Elasticsearch and OpenSearch ran in Docker Desktop on an M1 Pro, with the destination limited to 2 cores and 4 GiB of memory.</p>
+
+    <div class="table-scroll" role="region" aria-label="Benchmark results" tabindex="0">
+      <table>
+        <thead>
+          <tr><th>Destination</th><th class="num">Documents</th><th class="num">Time</th><th class="num">Docs / min</th><th class="num">Peak memory</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Elasticsearch 8.15</td><td class="num">11,396,503</td><td class="num">8 min</td><td class="num">1.43 M</td><td class="num">135 MB</td></tr>
+          <tr><td>OpenSearch 2.19</td><td class="num">11,396,503</td><td class="num">9.5 min</td><td class="num">1.19 M</td><td class="num">135 MB</td></tr>
+        </tbody>
+      </table>
     </div>
+    <p class="dim small" style="margin-top:16px">Fixed-size batches. Document counts matched the source. The destination's two cores were the limit, so a larger cluster should go faster. Don't read these as a promise for your data, because document size, mappings and hardware change everything. The harness is in <a href="https://github.com/kravex-net/kravex/tree/main/demo">the repo's <code>demo/</code> directory</a>, and you can run it yourself.</p>
+  </div>
+</section>
 
-    <div class="terminal" id="heroTerminal">
-      <div class="terminal-header">
-        <span class="terminal-dot r"></span>
-        <span class="terminal-dot y"></span>
-        <span class="terminal-dot g"></span>
-        <span class="terminal-title">kravex — migration</span>
-      </div>
-      <div class="terminal-body" id="terminalBody">
-        <div><span class="prompt">$</span> <span class="cmd">kravex migrate</span> <span class="flag">--config</span> <span class="cmd">kvx.toml</span></div>
-      </div>
+<section id="compared">
+  <div class="wrap">
+    <h2>Alternatives</h2>
+    <p>You have options for moving index data, and several are good at what they were built for. This is where each one tends to stop short for a large index-to-index move. Every claim links to its source, and these tools change, so check before you decide.</p>
+
+    <div class="table-scroll">
+      <table class="compare">
+        <tbody>
+          <tr>
+            <td>Elasticdump</td>
+            <td>Reports of about 1&nbsp;GB/hour in a community thread, and single-index reads go through the scroll API. <a href="https://discuss.elastic.co/t/elasticdump-performance-and-throughput/158561">Thread</a> · <a href="https://github.com/elasticsearch-dump/elasticsearch-dump/issues/11">Issue&nbsp;#11</a></td>
+          </tr>
+          <tr>
+            <td>Logstash</td>
+            <td>Elastic's write-up of moving a billion log lines saw throughput fall from about 6,000 to 700 docs/sec as pagination got deeper. <a href="https://www.elastic.co/blog/migrating-1-billion-log-lines-from-opensearch-to-elasticsearch">Blog post</a></td>
+          </tr>
+          <tr>
+            <td>Reindex API</td>
+            <td>Runs inside the destination cluster. For a remote source, the destination must be able to reach it and the host must be allowlisted. <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-reindex.html">Docs</a></td>
+          </tr>
+          <tr>
+            <td>AWS Migration Assistant</td>
+            <td>Runs on an AWS stack (CloudFormation, ECS, MSK, S3) and targets OpenSearch only. Aimed at live capture of up to about 4&nbsp;TB/day. <a href="https://docs.opensearch.org/latest/migration-assistant/is-migration-assistant-right-for-you/">Docs</a></td>
+          </tr>
+          <tr>
+            <td>Airbyte</td>
+            <td>General-purpose data movement. Elasticsearch is a destination connector, and pricing is based on volume. <a href="https://docs.airbyte.com/integrations/destinations/elasticsearch">Connector</a> · <a href="https://airbyte.com/blog/introducing-volume-based-pricing">Pricing</a></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </section>
 
-<!-- PROBLEM -->
-<section class="problem-section" id="problem">
-  <div class="container">
-    <span class="section-label">The Problem</span>
-    <h2 class="section-title">Switching between Elasticsearch and OpenSearch<br>means migrating all your existing data.</h2>
-    <div class="problem-grid">
+<section id="licensing">
+  <div class="wrap">
+    <h2>Licensing</h2>
+    <p>Kravex is source-available under the <a href="https://github.com/kravex-net/kravex/blob/main/LICENSE">Business Source License 1.1</a>, not an OSI-approved open-source license. On 2029-03-15 this version converts to Apache 2.0.</p>
+
+    <div class="terms">
       <div>
-        <p class="problem-quote">"Just stand up a new cluster and re-index everything."</p>
-        <p class="section-subtitle">Whether you're moving from Elasticsearch to OpenSearch or the other way around, you're sitting on 5-50+ TB of production data that <strong>must come with you</strong>. Compliance mandates retention. Customers depend on historical search. And no existing tool handles this migration at TB-scale without weeks of custom engineering.</p>
+        <h3>Use it for your own migrations</h3>
+        <p>Free, in production, with no limits. That covers internal tooling, CI pipelines and side projects.</p>
       </div>
-      <div class="compliance-grid">
-        <div class="compliance-item">
-          <span class="compliance-badge">PCI DSS</span>
-          <span>1 year minimum log retention</span>
-        </div>
-        <div class="compliance-item">
-          <span class="compliance-badge">SOC 2</span>
-          <span>Retention policies must be enforced and auditable</span>
-        </div>
-        <div class="compliance-item">
-          <span class="compliance-badge">HIPAA</span>
-          <span>6-year retention mandate</span>
-        </div>
-        <div class="compliance-item">
-          <span class="compliance-badge">FedRAMP</span>
-          <span>1-year minimum, often longer</span>
-        </div>
-        <div class="compliance-item">
-          <span class="compliance-badge">SOX</span>
-          <span>7-year retention for financial data</span>
-        </div>
+      <div>
+        <h3>Sell something built on it</h3>
+        <p>You need a commercial license if you offer a competing migration product or service to others. The same applies if Kravex is a material part of paid consulting, professional services or managed migrations.</p>
+      </div>
+      <div>
+        <h3>Enterprise features</h3>
+        <p>The <code>ee/</code> directory is under a separate license. It's reserved, with nothing shipped in it yet. If you need something specific there, tell us.</p>
       </div>
     </div>
+
+    <p style="margin-top:32px">Licensing questions: <a href="mailto:daniel@kravex.net">daniel@kravex.net</a></p>
   </div>
 </section>
 
-<!-- COMPETITORS -->
-<section id="competitors">
-  <div class="container">
-    <span class="section-label">Why Existing Tools Fall Short</span>
-    <h2 class="section-title">You've already looked at the alternatives.<br>Here's why they didn't work.</h2>
-    <div class="competitors-grid">
-      <div class="competitor-card">
-        <div class="competitor-name">Elasticdump</div>
-        <div class="competitor-verdict">~1 GB/hour throughput.<sup><a href="#fn1" id="ref1">[1]</a></sup> <code>multielasticdump</code> supports <code>--parallel</code> across indexes, but single-index throughput is limited by the scroll API.<sup><a href="#fn2" id="ref2">[2]</a></sup> No checkpoint/resume. Fine for dev — impractical for production TB-scale.</div>
-        <span class="competitor-tag tag-slow">~1 GB/hr</span>
-      </div>
-      <div class="competitor-card">
-        <div class="competitor-name">Logstash</div>
-        <div class="competitor-verdict">Deep-pagination degradation: 6,000 docs/sec drops to 700 docs/sec on billion-document indexes.<sup><a href="#fn3" id="ref3">[3]</a></sup> Weeks of tuning required to maintain throughput at scale.</div>
-        <span class="competitor-tag tag-slow">88% throughput loss</span>
-      </div>
-      <div class="competitor-card">
-        <div class="competitor-name">Reindex API</div>
-        <div class="competitor-verdict">Cannot migrate mappings, settings, or templates.<sup><a href="#fn4" id="ref4">[4]</a></sup> Source and destination must share direct connectivity (remote whitelist). Versioning and vendor compatibility problems between ES and OpenSearch forks.</div>
-        <span class="competitor-tag tag-lock">ES-only</span>
-      </div>
-      <div class="competitor-card">
-        <div class="competitor-name">AWS Migration Assistant</div>
-        <div class="competitor-verdict">Requires a full AWS stack to run (CloudFormation, ECS, MSK, S3). Only migrates to OpenSearch — no Elasticsearch targets. Under 4 TB/day live capture.<sup><a href="#fn5" id="ref5">[5]</a></sup></div>
-        <span class="competitor-tag tag-lock">AWS stack required</span>
-      </div>
-      <div class="competitor-card">
-        <div class="competitor-name">Airbyte</div>
-        <div class="competitor-verdict">Generic ETL. No ES schema optimization, no shard topology handling.<sup><a href="#fn6" id="ref6">[6]</a></sup> Per-row pricing — 10 TB costs thousands in credits.<sup><a href="#fn7" id="ref7">[7]</a></sup></div>
-        <span class="competitor-tag tag-toy">Generic ETL</span>
-      </div>
-      <div class="competitor-card">
-        <div class="competitor-name">AI-generated scripts</div>
-        <div class="competitor-verdict">Works for 10K docs. Silently loses data at 10M. Crashes at 100M when scroll context times out.<sup><a href="#fn8" id="ref8">[8]</a></sup> No checkpoint/resume, no backpressure, no retry logic.</div>
-        <span class="competitor-tag tag-fragile">Silent data loss</span>
-      </div>
-      <div class="competitor-card">
-        <div class="competitor-name">Custom in-house tooling</div>
-        <div class="competitor-verdict">Many organizations have built bespoke ES/OpenSearch migration pipelines. Multi-month engineering projects with ongoing maintenance burden.<sup><a href="#fn9" id="ref9">[9]</a></sup> Kravex replaces this with a single weekend.</div>
-        <span class="competitor-tag tag-slow">3+ months</span>
-      </div>
-    </div>
+</main>
 
-    <!-- FOOTNOTES -->
-    <div class="footnotes-section">
-      <h4>Sources</h4>
-      <div class="footnote-item" id="fn1">
-        <span class="fn-num">[1]</span>
-        <a href="https://discuss.elastic.co/t/elasticdump-performance-and-throughput/158561" target="_blank" rel="noopener">Elastic Discuss — Elasticdump performance and throughput</a> <a href="#ref1">&#8617;</a>
-      </div>
-      <div class="footnote-item" id="fn2">
-        <span class="fn-num">[2]</span>
-        <a href="https://github.com/elasticsearch-dump/elasticsearch-dump/issues/11" target="_blank" rel="noopener">elasticsearch-dump GitHub Issue #11 — Parallelism and scroll API limitations</a> <a href="#ref2">&#8617;</a>
-      </div>
-      <div class="footnote-item" id="fn3">
-        <span class="fn-num">[3]</span>
-        <a href="https://www.elastic.co/blog/migrating-1-billion-log-lines-from-opensearch-to-elasticsearch" target="_blank" rel="noopener">Elastic Blog — Migrating 1 billion log lines from OpenSearch to Elasticsearch</a> <a href="#ref3">&#8617;</a>
-      </div>
-      <div class="footnote-item" id="fn4">
-        <span class="fn-num">[4]</span>
-        <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-reindex.html" target="_blank" rel="noopener">Elastic Docs — Reindex API reference</a> <a href="#ref4">&#8617;</a>
-      </div>
-      <div class="footnote-item" id="fn5">
-        <span class="fn-num">[5]</span>
-        <a href="https://docs.opensearch.org/latest/migration-assistant/is-migration-assistant-right-for-you/" target="_blank" rel="noopener">OpenSearch Docs — Is Migration Assistant right for you? (requires AWS CloudFormation/ECS/MSK/S3 to operate; targets OpenSearch only, not Elasticsearch; &lt;4 TB/day live capture)</a> <a href="#ref5">&#8617;</a>
-      </div>
-      <div class="footnote-item" id="fn6">
-        <span class="fn-num">[6]</span>
-        <a href="https://docs.airbyte.com/integrations/destinations/elasticsearch" target="_blank" rel="noopener">Airbyte Docs — Elasticsearch destination connector (document-level only, no shard topology)</a> <a href="#ref6">&#8617;</a>
-      </div>
-      <div class="footnote-item" id="fn7">
-        <span class="fn-num">[7]</span>
-        <a href="https://airbyte.com/blog/introducing-volume-based-pricing" target="_blank" rel="noopener">Airbyte Blog — Introducing Volume-Based Pricing</a> <a href="#ref7">&#8617;</a>
-      </div>
-      <div class="footnote-item" id="fn8">
-        <span class="fn-num">[8]</span>
-        <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/scroll-api.html" target="_blank" rel="noopener">Elastic Docs — Scroll API (deprecated for deep pagination; context timeouts at scale)</a> <a href="#ref8">&#8617;</a>
-      </div>
-      <div class="footnote-item" id="fn9">
-        <span class="fn-num">[9]</span>
-        <a href="https://about.gitlab.com/blog/2021/06/01/advanced-search-data-migrations/" target="_blank" rel="noopener">GitLab Blog — Data migration process for Advanced Search (custom ES migration framework, weeks-to-months effort)</a> <a href="#ref9">&#8617;</a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- HOW IT WORKS -->
-<section id="how" style="background: var(--bg-secondary);">
-  <div class="container">
-    <span class="section-label">How It Works</span>
-    <h2 class="section-title">Two steps. One weekend.</h2>
-    <p class="section-subtitle">Configuration-as-code. Resume if anything fails.</p>
-    <div class="steps-grid">
-      <div class="step-card">
-        <div class="step-num">01 — CONFIGURE</div>
-        <h3>Define your migration</h3>
-        <p>Declare source, target, and runtime settings in a TOML config. Version-controllable, reviewable, repeatable.</p>
-        <div class="step-code">
-<span class="comment"># kvx.toml</span><br>
-<br>
-<span class="key">[runtime]</span><br>
-<span class="key">queue_capacity</span> = <span class="val">8</span><br>
-<span class="key">sink_parallelism</span> = <span class="val">4</span><br>
-<br>
-<span class="key">[source.Elasticsearch]</span><br>
-<span class="key">url</span> = <span class="val">"http://localhost:9200"</span><br>
-<span class="key">index</span> = <span class="val">"employees"</span><br>
-<br>
-<span class="key">[sink.OpenSearch]</span><br>
-<span class="key">url</span> = <span class="val">"http://localhost:9201"</span><br>
-<span class="key">index</span> = <span class="val">"employees"</span>
-        </div>
-      </div>
-      <div class="step-card">
-        <div class="step-num">02 — MIGRATE</div>
-        <h3>Run the migration</h3>
-        <p>Checkpoint/resume means if anything fails — network blip, node restart, disk full — you pick up exactly where you left off. Not from zero.</p>
-        <div class="step-code">
-<span class="prompt">$</span> <span class="cmd">kravex migrate</span> <span class="flag">--config</span> <span class="cmd">kvx.toml</span><br><br>
-<span class="output">employees </span><span class="success">████████████████</span> <span class="val">100%</span><br>
-<span class="output">logs-2024-01 </span><span class="success">████████████████</span> <span class="val">100%</span><br>
-<span class="output">logs-2024-02 </span><span class="success">██████████</span><span class="output">██████</span> <span class="val"> 62%</span><br>
-<span class="output">logs-2024-03 </span><span class="output">████████████████</span> <span class="text-muted"> queued</span><br><br>
-<span class="output">Throughput: </span><span class="val">~240 GB/hr</span> <span class="output">| ETA: </span><span class="val">6h 12m</span>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- PRICING -->
-<section id="pricing">
-  <div class="container">
-    <span class="section-label">Pricing</span>
-    <h2 class="section-title">One-time purchase. Not a subscription.</h2>
-    <p class="section-subtitle">Start with the open-source core. Upgrade when you need TB-scale parallelism, compliance features, or white-label embedding.</p>
-    <div class="pricing-grid">
-
-      <!-- Open Source -->
-      <div class="price-card">
-        <div class="price-tier">OPEN SOURCE</div>
-        <h3>Community</h3>
-        <div class="price-amount">Free</div>
-        <div class="price-note">Apache 2.0 — forever</div>
-        <ul class="price-features">
-          <li>Full CLI migration engine</li>
-          <li>Config-as-code (TOML)</li>
-          <li>Community support (GitHub, Discord)</li>
-        </ul>
-        <a href="https://github.com/kravex-net/kravex" class="price-btn price-btn-outline">Get Started</a>
-      </div>
-
-      <!-- Pro -->
-      <div class="price-card">
-        <div class="price-tier">PRO</div>
-        <h3>Production</h3>
-        <div class="price-amount">Contact</div>
-        <div class="price-note">One-time license</div>
-        <ul class="price-features">
-          <li>Everything in Community</li>
-          <li>All connectors and schema mapping</li>
-          <li>Checkpoint/resume on failure</li>
-          <li>Dry-run validation</li>
-          <li>Index-level filtering</li>
-          <li>Basic type mapping</li>
-          <li>Docker image included</li>
-          <li>TB-scale parallel shard processing</li>
-          <li>Intelligent backpressure management</li>
-          <li>Real-time terminal UI dashboard</li>
-          <li>Multi-index orchestration</li>
-          <li>Post-migration integrity checks</li>
-          <li>Priority email support (24h SLA)</li>
-        </ul>
-        <a href="mailto:daniel@kravex.net?subject=Kravex%20Pro%20License" class="price-btn price-btn-primary">Contact Sales</a>
-      </div>
-
-      <!-- Enterprise -->
-      <div class="price-card">
-        <div class="price-tier">ENTERPRISE</div>
-        <h3>Compliance</h3>
-        <div class="price-amount">Custom</div>
-        <div class="price-note">Direct sales</div>
-        <ul class="price-features">
-          <li>Everything in Pro</li>
-          <li>Role-based access control</li>
-          <li>Full audit logging</li>
-          <li>Compliance-ready (SOC 2, HIPAA, PCI)</li>
-          <li>Dedicated SLA support</li>
-          <li>Custom connector development</li>
-        </ul>
-        <a href="mailto:daniel@kravex.net?subject=Kravex%20Enterprise" class="price-btn price-btn-outline">Contact Sales</a>
-        <div class="price-sub-options">Professional services available</div>
-      </div>
-
-      <!-- Partnerships -->
-      <div class="price-card">
-        <div class="price-tier">PARTNERSHIPS</div>
-        <h3>OEM / White-Label</h3>
-        <div class="price-amount">Custom</div>
-        <div class="price-note">Revenue share or flat OEM</div>
-        <ul class="price-features">
-          <li>Everything in Enterprise</li>
-          <li>Full white-label rebrand</li>
-          <li>Embeddable migration widget</li>
-          <li>Partner API (programmatic)</li>
-          <li>Target-specific optimizations</li>
-          <li>Telemetry &amp; reporting dashboard</li>
-          <li>Co-branded documentation</li>
-          <li>Dedicated integration engineering</li>
-          <li>Joint go-to-market support</li>
-        </ul>
-        <a href="mailto:daniel@kravex.net?subject=Kravex%20Partnership" class="price-btn price-btn-outline">Become a Partner</a>
-        <div class="price-sub-options">Stop losing deals to migration inertia</div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<!-- COMPLIANCE -->
-<section class="compliance-section" id="compliance">
-  <div class="container">
-    <span class="section-label">Compliance</span>
-    <h2 class="section-title">Your compliance framework requires log retention.<br>Kravex makes migration possible without breaking the chain.</h2>
-    <p class="section-subtitle">The only migration tool built for compliance-aware data migration between Elasticsearch and OpenSearch.</p>
-    <div class="framework-grid">
-      <div class="framework-card">
-        <h4>PCI DSS</h4>
-        <div class="retention">1 year</div>
-        <p>Minimum log retention. Audit trails must be preserved during and after migration.</p>
-      </div>
-      <div class="framework-card">
-        <h4>SOC 2</h4>
-        <div class="retention">Auditable</div>
-        <p>Retention policies must be enforced, documented, and verifiable by auditors.</p>
-      </div>
-      <div class="framework-card">
-        <h4>HIPAA</h4>
-        <div class="retention">6 years</div>
-        <p>Protected health information retention mandate. No gaps allowed.</p>
-      </div>
-      <div class="framework-card">
-        <h4>FedRAMP</h4>
-        <div class="retention">1+ years</div>
-        <p>Minimum one year, often extended. Continuous monitoring logs included.</p>
-      </div>
-      <div class="framework-card">
-        <h4>SOX</h4>
-        <div class="retention">7 years</div>
-        <p>Financial data and audit logs. The longest standard retention window.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- TRUST -->
-<section id="trust">
-  <div class="container">
-    <span class="section-label">Why Kravex</span>
-    <h2 class="section-title">Built for the migrations everyone else ignores.</h2>
-    <div class="trust-grid">
-      <div class="trust-card">
-        <h4>Every Deployment. Every Direction.</h4>
-        <p>If it speaks the Elasticsearch or OpenSearch API, Kravex can move it. Source or destination — doesn't matter.</p>
-        <p style="margin-top: 16px;"><strong>Managed services:</strong> AWS OpenSearch Service, Elastic Cloud, Aiven, Instaclustr (NetApp), Bonsai, DigitalOcean, OVHcloud, Oracle OCI — any managed offering that exposes an ES or OpenSearch endpoint.</p>
-        <p style="margin-top: 12px;"><strong>Self-hosted:</strong> Kubernetes via ECK or the OpenSearch K8s Operator, Docker Compose, Helm charts, bare-metal RPM/DEB installs, Ansible-provisioned VMs — however you run your clusters.</p>
-        <p style="margin-top: 12px;"><strong>On-prem:</strong> Air-gapped data centers, private cloud, behind a VPN — Kravex is a CLI binary with a TOML config. No SaaS dependency, no phone-home, no cloud account required.</p>
-        <p style="margin-top: 16px;">Other tools lock you into a single vendor's ecosystem. AWS Migration Assistant only targets Amazon OpenSearch Service. Elastic's reindex API requires direct cluster connectivity. Kravex works across every combination — managed to self-hosted, on-prem to cloud, or anything in between. Your infrastructure choices are yours. The migration tool shouldn't be the constraint.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- CTA -->
-<section style="background: var(--bg-secondary); text-align: center;">
-  <div class="container">
-    <h2 class="section-title" style="margin-bottom: 16px;">Ready to migrate?</h2>
-    <p class="section-subtitle" style="margin: 0 auto 36px;">Start with the open-source CLI. Upgrade when you need TB-scale performance.</p>
-    <div class="hero-buttons" style="justify-content: center;">
-      <a href="https://github.com/kravex-net/kravex" class="btn-primary">
-        <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        Star on GitHub
-      </a>
-      <a href="mailto:daniel@kravex.net" class="btn-secondary">Contact for Enterprise</a>
-    </div>
-  </div>
-</section>
-
-<!-- FOOTER -->
 <footer>
-  <div class="footer-inner">
-    <div class="footer-brand">
-      <a href="#" class="nav-logo">kravex<span>.net</span></a>
-      <p>Elasticsearch and OpenSearch migrations — every deployment, any scale.</p>
-    </div>
-    <div class="footer-links">
-      <h5>Product</h5>
-      <a href="https://github.com/kravex-net/kravex">GitHub</a>
-      <a href="#how">Documentation</a>
-      <a href="#pricing">Pricing</a>
-    </div>
-    <div class="footer-links">
-      <h5>Company</h5>
-      <a href="mailto:daniel@kravex.net">Contact</a>
-      <a href="mailto:daniel@kravex.net?subject=Kravex%20Enterprise">Enterprise Sales</a>
-      <a href="mailto:daniel@kravex.net?subject=Kravex%20Partnership">Partnerships</a>
-    </div>
-    <div class="footer-links">
-      <h5>Community</h5>
-      <a href="https://github.com/kravex-net/kravex">GitHub</a>
-      <a href="#">Discord</a>
-    </div>
-  </div>
-  <div class="footer-bottom">
-    <span>&copy; 2026 Kravex. Apache 2.0 License.</span>
-    <span>daniel@kravex.net</span>
+  <div class="wrap">
+    <span>© 2026 Kravex, Inc.</span>
+    <ul>
+      <li><a href="https://github.com/kravex-net/kravex">GitHub</a></li>
+      <li><a href="https://github.com/kravex-net/kravex/blob/main/README.md">README</a></li>
+      <li><a href="https://github.com/kravex-net/kravex/blob/main/LICENSE">License</a></li>
+      <li><a href="mailto:daniel@kravex.net">daniel@kravex.net</a></li>
+    </ul>
   </div>
 </footer>
-
-<script>
-// Nav scroll effect
-const nav = document.getElementById('nav');
-window.addEventListener('scroll', () => {
-  nav.classList.toggle('scrolled', window.scrollY > 20);
-});
-
-// Mobile nav toggle
-const navToggle = document.getElementById('navToggle');
-const navLinks = document.getElementById('navLinks');
-navToggle.addEventListener('click', () => {
-  navLinks.classList.toggle('open');
-});
-navLinks.querySelectorAll('a').forEach(a => {
-  a.addEventListener('click', () => navLinks.classList.remove('open'));
-});
-
-// Terminal typing animation
-const terminalLines = [
-  { delay: 800, html: '<span class="output">\nConnecting to localhost:9200... </span><span class="success">OK</span>' },
-  { delay: 400, html: '<span class="output">\nConnecting to localhost:9201... </span><span class="success">OK</span>' },
-  { delay: 600, html: '<span class="output">\nReading source index mappings...</span>' },
-  { delay: 500, html: '<span class="output">\nIndices matched: </span><span class="cmd">12</span>' },
-  { delay: 400, html: '<span class="output">\nTotal estimated size: </span><span class="cmd">3.2 TB</span>' },
-  { delay: 300, html: '<span class="output">\nMapping compatibility: </span><span class="success">PASS</span>' },
-  { delay: 500, html: '<span class="output">\n</span><span class="success">✓ Starting migration...</span>' },
-  { delay: 800, html: '\n\n<span class="output">Starting migration with </span><span class="cmd">4 sink workers</span><span class="output">...</span>' },
-  { delay: 400, html: '<span class="output">\n\n  employees     </span><span class="success">████████████████</span> <span class="cmd">100%</span><span class="output">   42 GB   5m</span>' },
-  { delay: 600, html: '<span class="output">\n  logs-2024-01  </span><span class="success">████████████████</span> <span class="cmd">100%</span><span class="output">  142 GB  18m</span>' },
-  { delay: 400, html: '<span class="output">\n  logs-2024-02  </span><span class="success">██████████</span><span class="output">██████</span> <span class="cmd"> 62%</span><span class="output">   89 GB  est. 9m</span>' },
-  { delay: 200, html: '<span class="output">\n  logs-2024-03  </span><span class="text-muted">················</span><span class="output">  queued</span>' },
-  { delay: 600, html: '<span class="output">\n\n  Throughput: </span><span class="cmd">~240 GB/hr</span><span class="output">  |  ETA: </span><span class="cmd">6h 12m</span><span class="output">  |  Errors: </span><span class="success">0</span>' },
-];
-
-function runTerminal() {
-  const body = document.getElementById('terminalBody');
-  let totalDelay = 1500;
-  terminalLines.forEach((line) => {
-    totalDelay += line.delay;
-    setTimeout(() => {
-      body.insertAdjacentHTML('beforeend', line.html);
-      body.scrollTop = body.scrollHeight;
-    }, totalDelay);
-  });
-  // Add blinking cursor at the end
-  setTimeout(() => {
-    body.insertAdjacentHTML('beforeend', '\n\n<span class="prompt">$</span> <span class="cursor"></span>');
-  }, totalDelay + 800);
-}
-
-// Start terminal animation when hero is in view
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      runTerminal();
-      observer.disconnect();
-    }
-  });
-}, { threshold: 0.3 });
-observer.observe(document.getElementById('heroTerminal'));
-</script>
 
 </body>
 </html>
