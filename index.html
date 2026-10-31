@@ -99,6 +99,9 @@ th { font-weight: 500; color: var(--text-dim); font-size: 0.8rem; white-space: n
 td.num, th.num { text-align: right; font-family: var(--font-mono); white-space: nowrap; padding-right: 16px; }
 td.num { font-size: 0.85rem; }
 table.compare td:first-child { white-space: nowrap; font-weight: 500; padding-right: 24px; }
+td p { max-width: none; }
+td p + p { margin-top: 8px; }
+.planned { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px; padding: 0.15em 0.5em; margin-left: 8px; vertical-align: middle; white-space: nowrap; }
 caption { text-align: left; color: var(--text-dim); font-size: 0.875rem; padding-bottom: 4px; caption-side: bottom; padding-top: 12px; }
 
 .terms { display: grid; gap: 28px; margin-top: 28px; }
@@ -190,6 +193,7 @@ index = "employees"</code></pre>
     <ul class="plain">
       <li>It copies documents only. Create the destination index, with its mappings and settings, before you start. Kravex doesn't migrate mappings, settings or templates.</li>
       <li>There is no checkpoint file, so an interrupted run can't pick up where it stopped.</li>
+      <li>It migrates one index per run. <a href="#orchestration">Orchestration</a>, with per-index cutover and rollback, is planned and not released.</li>
       <li>You build it from source, which needs a Rust toolchain.</li>
       <li>The version range above comes from the project README. The repo's own Docker setup exercises Elasticsearch 8.15 and OpenSearch 2.19.</li>
     </ul>
@@ -219,11 +223,18 @@ index = "employees"</code></pre>
 <section id="compared">
   <div class="wrap">
     <h2>Alternatives</h2>
-    <p>You have options for moving index data, and several are good at what they were built for. This is where each one tends to stop short for a large index-to-index move. Every claim links to its source, and these tools change, so check before you decide.</p>
+    <p>You have options for moving index data, and several are good at what they were built for. This is where each one tends to stop short for a large index-to-index move. Claims about other tools link to their sources, and these tools change, so check before you decide.</p>
 
     <div class="table-scroll">
       <table class="compare">
         <tbody>
+          <tr>
+            <td>Snapshot and restore</td>
+            <td>
+              <p>Built into both engines, but the data takes several hops: source cluster, then object storage such as S3, then destination cluster. The snapshot has to be written before it can be restored, and the repository must be reachable from every environment involved, so you end up sharing it or copying it between them. Kravex streams instead. It writes to the destination as soon as it has read from the source, which can shorten the total time and removes the intermediate copy.</p>
+              <p>Restore moves forward by one version only: the same version or the next one. You can't skip versions, and you can't restore a newer snapshot into an older cluster. <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshot-restore.html">Docs</a></p>
+            </td>
+          </tr>
           <tr>
             <td>Elasticdump</td>
             <td>Reports of about 1&nbsp;GB/hour in a community thread, and single-index reads go through the scroll API. <a href="https://discuss.elastic.co/t/elasticdump-performance-and-throughput/158561">Thread</a> · <a href="https://github.com/elasticsearch-dump/elasticsearch-dump/issues/11">Issue&nbsp;#11</a></td>
@@ -247,6 +258,24 @@ index = "employees"</code></pre>
         </tbody>
       </table>
     </div>
+
+    <h3>Rollback is the bigger difference</h3>
+    <p>A snapshot restore is a one-way move. Say you restore an index into the newer cluster and your application starts writing to it. If something goes wrong, you can't send a snapshot of the new cluster back to the old one, because a snapshot from a newer Lucene version can't be restored into an older cluster. Going back means losing every write made since the cutover.</p>
+    <p>Kravex copies documents through the bulk API, so it can write in either direction and doesn't depend on the Lucene version. Having a fallback that keeps your writes is the main reason to avoid a one-way migration. Orchestrating that fallback is the next piece of work, described below.</p>
+  </div>
+</section>
+
+<section id="orchestration">
+  <div class="wrap">
+    <h2>Coming: per-index orchestration <span class="planned">not released</span></h2>
+    <p>Today Kravex copies one index per run, and you handle the cutover yourself. Orchestration is planned to take that over, one index at a time, with a way back for each.</p>
+    <ul class="plain">
+      <li><strong>Read-only source.</strong> The source index goes read-only while its migration runs.</li>
+      <li><strong>Per-index routing.</strong> You update your application to point each index at the cluster that currently holds it. Different indices can live on different clusters during the move.</li>
+      <li><strong>Rollback.</strong> If the new cluster misbehaves, you migrate the index back, even after it has received writes on the new side.</li>
+      <li><strong>Backward compatibility.</strong> Because an index can move backwards, nothing is stranded on the newer version.</li>
+    </ul>
+    <p class="dim small" style="margin-top:16px">This section describes planned work. None of it is in the current CLI.</p>
   </div>
 </section>
 
