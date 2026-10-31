@@ -246,7 +246,10 @@ index = "employees"</code></pre>
           </tr>
           <tr>
             <td>Reindex API</td>
-            <td>Runs inside the destination cluster. For a remote source, the destination must be able to reach it and the host must be allowlisted. <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-reindex.html">Docs</a></td>
+            <td>
+              <p>Runs inside the destination cluster. For a remote source, the destination must be able to reach it, and the source host must be on the destination's allowlist. <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-reindex.html">Docs</a></p>
+              <p>That gets difficult on managed services. Some providers restrict outbound connections from the cluster, or don't give you control of the allowlist. If the source sits on a private network, such as an OpenSearch domain in a VPC, its endpoint has to be exposed to the destination through NAT, peering or a public address, and the destination has to be allowed in. Kravex runs on any machine that can reach both clusters, so neither cluster needs a network path to the other.</p>
+            </td>
           </tr>
           <tr>
             <td>AWS Migration Assistant</td>
