@@ -193,7 +193,8 @@ index = "employees"</code></pre>
     <ul class="plain">
       <li>It copies documents only. Create the destination index, with its mappings and settings, before you start. Kravex doesn't migrate mappings, settings or templates.</li>
       <li>There is no checkpoint file, so an interrupted run can't pick up where it stopped.</li>
-      <li>It migrates one index per run. <a href="#orchestration">Orchestration</a>, with per-index cutover and rollback, is planned and not released.</li>
+      <li>Copying to an older version works only if the older cluster supports the index's mappings and field types, and the index keeps its full <code>_source</code>. Newer-only field types and disabled <code>_source</code> can't be copied backwards.</li>
+      <li>It migrates one index per run.<a href="#orchestration">Orchestration</a>, with per-index cutover and rollback, is planned and not released.</li>
       <li>You build it from source, which needs a Rust toolchain.</li>
       <li>The version range above comes from the project README. The repo's own Docker setup exercises Elasticsearch 8.15 and OpenSearch 2.19.</li>
     </ul>
@@ -231,8 +232,8 @@ index = "employees"</code></pre>
           <tr>
             <td>Snapshot and restore</td>
             <td>
-              <p>Built into both engines, but the data takes several hops: source cluster, then object storage such as S3, then destination cluster. The snapshot has to be written before it can be restored, and the repository must be reachable from every environment involved, so you end up sharing it or copying it between them. Kravex streams instead. It writes to the destination as soon as it has read from the source, which can shorten the total time and removes the intermediate copy.</p>
-              <p>Restore moves forward by one version only: the same version or the next one. You can't skip versions, and you can't restore a newer snapshot into an older cluster. <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshot-restore.html">Docs</a></p>
+              <p>Built into both engines, but the data goes through an intermediate store: source cluster, then a snapshot repository such as S3, then destination cluster. The snapshot has to be finished before it can be restored, and every master and data node in both clusters must be able to reach the repository, so you end up sharing it or copying it between environments. Kravex streams instead. It writes to the destination as soon as it has read from the source, which can shorten the total time and removes the intermediate copy.</p>
+              <p>Restore only moves forward, and only by one major version. Every index in the snapshot must have been created in the target cluster's major version or the one before it. You can't restore into an older cluster, not even an older minor release. OpenSearch also can't restore indexes created by Elasticsearch 7.11 or later. <a href="https://www.elastic.co/docs/deploy-manage/tools/snapshot-and-restore">Elastic docs</a> · <a href="https://docs.opensearch.org/latest/tuning-your-cluster/availability-and-recovery/snapshots/snapshot-restore/#conflicts-and-compatibility">OpenSearch docs</a> · <a href="https://docs.opensearch.org/latest/migrate-or-upgrade/#index-compatibility-reference">Compatibility reference</a></p>
             </td>
           </tr>
           <tr>
@@ -260,8 +261,8 @@ index = "employees"</code></pre>
     </div>
 
     <h3>Rollback is the bigger difference</h3>
-    <p>A snapshot restore is a one-way move. Say you restore an index into the newer cluster and your application starts writing to it. If something goes wrong, you can't send a snapshot of the new cluster back to the old one, because a snapshot from a newer Lucene version can't be restored into an older cluster. Going back means losing every write made since the cutover.</p>
-    <p>Kravex copies documents through the bulk API, so it can write in either direction and doesn't depend on the Lucene version. Having a fallback that keeps your writes is the main reason to avoid a one-way migration. Orchestrating that fallback is the next piece of work, described below.</p>
+    <p>A snapshot restore is a one-way move. Neither Elasticsearch nor OpenSearch can restore a snapshot into an older version, so once the new cluster takes writes, its snapshots can't go back to the old one. If your rollback plan is the snapshot you took before cutover, rolling back loses every write made since then.</p>
+    <p>Kravex copies documents through the bulk API, so the target writes its own index files and the source's Lucene version doesn't matter. It can also copy from a newer cluster to an older one, as long as the older cluster supports the mappings and field types in use and the full documents can be read from <code>_source</code>. Orchestrating that fallback is the next piece of work, described below.</p>
   </div>
 </section>
 
@@ -273,7 +274,7 @@ index = "employees"</code></pre>
       <li><strong>Read-only source.</strong> The source index goes read-only while its migration runs.</li>
       <li><strong>Per-index routing.</strong> You update your application to point each index at the cluster that currently holds it. Different indices can live on different clusters during the move.</li>
       <li><strong>Rollback.</strong> If the new cluster misbehaves, you migrate the index back, even after it has received writes on the new side.</li>
-      <li><strong>Backward compatibility.</strong> Because an index can move backwards, nothing is stranded on the newer version.</li>
+      <li><strong>Backward compatibility.</strong> Because an index can move backwards, nothing is stranded on the newer version, provided the older cluster supports the index's mappings and field types.</li>
     </ul>
     <p class="dim small" style="margin-top:16px">This section describes planned work. None of it is in the current CLI.</p>
   </div>
